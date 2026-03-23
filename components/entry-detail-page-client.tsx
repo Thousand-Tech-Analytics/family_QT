@@ -1,21 +1,50 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { DevDataSourceIndicator } from "@/components/dev-data-source-indicator";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
-import { getEntryById } from "@/lib/repositories/family-qt-repository";
+import {
+  getMockEntryDetailPageData,
+  loadEntryDetailPageData,
+  shouldUseAppsScriptRuntime,
+} from "@/lib/repositories/family-qt-repository";
+import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
-type EntryPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+export function EntryDetailPageClient() {
+  const searchParams = useSearchParams();
+  const entryId = searchParams.get("id");
+  const { data: entry, meta } = useRuntimePageData({
+    initialData: getMockEntryDetailPageData(entryId),
+    load: () =>
+      entryId
+        ? loadEntryDetailPageData(entryId)
+        : Promise.resolve({ data: null, meta: { source: "mock", error: null } }),
+    enabled: shouldUseAppsScriptRuntime() && Boolean(entryId),
+    reloadKey: entryId ?? "missing-entry-id",
+  });
 
-export default async function EntryDetailPage({ params }: EntryPageProps) {
-  const { id } = await params;
-  const entry = await getEntryById(id);
-
-  if (!entry) {
-    notFound();
+  if (!entryId || !entry) {
+    return (
+      <div className="space-y-5">
+        <Card className="space-y-4 text-center">
+          <p className="text-sm text-muted">찾을 수 없는 나눔입니다.</p>
+          <h1 className="text-2xl font-bold">요청한 글이 아직 준비되지 않았어요</h1>
+          <p className="text-sm leading-6 text-muted">
+            링크가 잘못되었거나, 아직 정적 빌드에 포함되지 않은 글일 수 있습니다.
+          </p>
+          <Link
+            href="/"
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-accent px-5 text-sm font-semibold text-white"
+          >
+            홈으로 돌아가기
+          </Link>
+        </Card>
+        <DevDataSourceIndicator source={meta.source} error={meta.error} />
+      </div>
+    );
   }
 
   return (
@@ -111,6 +140,8 @@ export default async function EntryDetailPage({ params }: EntryPageProps) {
           답글 남기기
         </button>
       </Card>
+
+      <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
   );
 }

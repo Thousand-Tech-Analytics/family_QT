@@ -8,7 +8,7 @@ type EntryCardProps = {
 
 export function EntryCard({ entry }: EntryCardProps) {
   return (
-    <Link href={`/entries/${entry.id}`} className="block">
+    <Link href={`/entry?id=${encodeURIComponent(entry.id)}`} className="block">
       <Card className="space-y-4 transition hover:-translate-y-0.5 hover:border-accent/60">
         <div className="flex items-start justify-between gap-3">
           <div>

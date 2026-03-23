@@ -1,15 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import { DevDataSourceIndicator } from "@/components/dev-data-source-indicator";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
-  getArchivePageData,
+  getMockArchivePageData,
   getViewerContext,
+  loadArchivePageData,
+  shouldUseAppsScriptRuntime,
 } from "@/lib/repositories/family-qt-repository";
+import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
-export default async function ArchivePage() {
+export default function ArchivePage() {
   const viewer = getViewerContext();
-  const archivePageData = await getArchivePageData(viewer.localDate.slice(0, 7));
+  const month = viewer.localDate.slice(0, 7);
+  const { data: archivePageData, meta } = useRuntimePageData({
+    initialData: getMockArchivePageData(month),
+    load: () => loadArchivePageData(month),
+    enabled: shouldUseAppsScriptRuntime(),
+    reloadKey: month,
+  });
 
   return (
     <div className="space-y-5">
@@ -27,7 +39,7 @@ export default async function ArchivePage() {
               {group.items.map((entry) => (
                 <Link
                   key={entry.id}
-                  href={`/entries/${entry.id}`}
+                  href={`/entry?id=${encodeURIComponent(entry.id)}`}
                   className="block rounded-2xl border border-line/70 bg-white/75 px-4 py-4 transition hover:border-accent"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -46,6 +58,8 @@ export default async function ArchivePage() {
           </Card>
         ))}
       </div>
+
+      <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
   );
 }

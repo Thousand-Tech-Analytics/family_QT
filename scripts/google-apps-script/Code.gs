@@ -2,50 +2,59 @@ var SPREADSHEET_ID = "REPLACE_WITH_YOUR_SPREADSHEET_ID";
 
 function doGet(e) {
   var action = (e.parameter.action || "").trim();
+  var callback = (e.parameter.callback || "").trim();
 
   try {
     if (action === "getPassageByDate") {
-      return jsonResponse(getPassageByDate_(e.parameter.date));
+      return respond_(getPassageByDate_(e.parameter.date), callback);
     }
 
     if (action === "getEntriesByDate") {
-      return jsonResponse(getEntriesByDate_(e.parameter.date));
+      return respond_(getEntriesByDate_(e.parameter.date), callback);
     }
 
     if (action === "getMonthSummary") {
-      return jsonResponse(getMonthSummary_(e.parameter.month));
+      return respond_(getMonthSummary_(e.parameter.month), callback);
     }
 
     if (action === "getReplies") {
-      return jsonResponse(getReplies_(e.parameter.entryId));
+      return respond_(getReplies_(e.parameter.entryId), callback);
     }
 
     if (action === "getEntryById") {
-      return jsonResponse(getEntryById_(e.parameter.entryId));
+      return respond_(getEntryById_(e.parameter.entryId), callback);
     }
 
-    return errorResponse_("Unsupported action: " + action);
+    return errorResponse_("Unsupported action: " + action, callback);
   } catch (error) {
-    return errorResponse_(error.message || String(error));
+    return errorResponse_(error.message || String(error), callback);
   }
 }
 
-function jsonResponse(data) {
-  return ContentService.createTextOutput(
-    JSON.stringify({
-      ok: true,
-      data: data
-    })
-  ).setMimeType(ContentService.MimeType.JSON);
+function respond_(data, callback) {
+  return outputPayload_({
+    ok: true,
+    data: data
+  }, callback);
 }
 
-function errorResponse_(message) {
-  return ContentService.createTextOutput(
-    JSON.stringify({
-      ok: false,
-      error: message
-    })
-  ).setMimeType(ContentService.MimeType.JSON);
+function errorResponse_(message, callback) {
+  return outputPayload_({
+    ok: false,
+    error: message
+  }, callback);
+}
+
+function outputPayload_(payload, callback) {
+  var json = JSON.stringify(payload);
+
+  if (callback) {
+    return ContentService.createTextOutput(callback + "(" + json + ");")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function getSpreadsheet_() {
@@ -96,7 +105,7 @@ function getPassageByDate_(localDate) {
   }
 
   return {
-    localDate: String(match.local_date),
+    local_date: String(match.local_date),
     reference: String(match.reference || "")
   };
 }
@@ -116,23 +125,23 @@ function getEntriesByDate_(localDate) {
       return String(entry.local_date) === String(localDate);
     })
     .map(function(entry) {
-      var id = String(entry.id || "");
+      var id = String(entry.entry_id || "");
 
       return {
-        id: id,
-        authorId: String(entry.author_id || ""),
-        localDate: String(entry.local_date || ""),
-        createdAtUtc: String(entry.created_at_utc || ""),
+        entry_id: id,
+        member_id: String(entry.member_id || ""),
+        local_date: String(entry.local_date || ""),
+        created_at: String(entry.created_at || ""),
         status: String(entry.status || "published"),
-        passageReferenceSnapshot: String(entry.passage_reference_snapshot || ""),
-        memorableLine: String(entry.memorable_line || ""),
+        passage_reference_snapshot: String(entry.passage_reference_snapshot || ""),
+        memorable_line: String(entry.memorable_line || ""),
         reflection: String(entry.reflection || ""),
-        application: String(entry.application || ""),
+        application_or_prayer: String(entry.application_or_prayer || ""),
         replyCount: replyCountByEntryId[id] || 0
       };
     })
     .sort(function(a, b) {
-      return String(b.createdAtUtc).localeCompare(String(a.createdAtUtc));
+      return String(b.created_at).localeCompare(String(a.created_at));
     });
 }
 
@@ -156,8 +165,8 @@ function getMonthSummary_(month) {
     .reverse()
     .map(function(localDate) {
       return {
-        localDate: localDate,
-        entryCount: counts[localDate]
+        local_date: localDate,
+        entry_count: counts[localDate]
       };
     });
 }
@@ -171,15 +180,16 @@ function getReplies_(entryId) {
     })
     .map(function(reply) {
       return {
-        id: String(reply.id || ""),
-        entryId: String(reply.entry_id || ""),
-        authorId: String(reply.author_id || ""),
-        createdAtUtc: String(reply.created_at_utc || ""),
-        body: String(reply.body || "")
+        reply_id: String(reply.reply_id || ""),
+        entry_id: String(reply.entry_id || ""),
+        member_id: String(reply.member_id || ""),
+        body: String(reply.body || ""),
+        created_at: String(reply.created_at || ""),
+        updated_at: String(reply.updated_at || "")
       };
     })
     .sort(function(a, b) {
-      return String(a.createdAtUtc).localeCompare(String(b.createdAtUtc));
+      return String(a.created_at).localeCompare(String(b.created_at));
     });
 }
 
@@ -194,7 +204,7 @@ function getEntryById_(entryId) {
   });
 
   var match = entries.find(function(entry) {
-    return String(entry.id) === String(entryId);
+    return String(entry.entry_id) === String(entryId);
   });
 
   if (!match) {
@@ -202,15 +212,15 @@ function getEntryById_(entryId) {
   }
 
   return {
-    id: String(match.id || ""),
-    authorId: String(match.author_id || ""),
-    localDate: String(match.local_date || ""),
-    createdAtUtc: String(match.created_at_utc || ""),
+    entry_id: String(match.entry_id || ""),
+    member_id: String(match.member_id || ""),
+    local_date: String(match.local_date || ""),
+    created_at: String(match.created_at || ""),
     status: String(match.status || "published"),
-    passageReferenceSnapshot: String(match.passage_reference_snapshot || ""),
-    memorableLine: String(match.memorable_line || ""),
+    passage_reference_snapshot: String(match.passage_reference_snapshot || ""),
+    memorable_line: String(match.memorable_line || ""),
     reflection: String(match.reflection || ""),
-    application: String(match.application || ""),
-    replyCount: replyCountByEntryId[String(match.id || "")] || 0
+    application_or_prayer: String(match.application_or_prayer || ""),
+    replyCount: replyCountByEntryId[String(match.entry_id || "")] || 0
   };
 }

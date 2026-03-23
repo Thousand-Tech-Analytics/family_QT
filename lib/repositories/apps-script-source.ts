@@ -1,7 +1,3 @@
-import "server-only";
-
-import { unstable_noStore as noStore } from "next/cache";
-
 type AppsScriptEnvelope<T> = {
   ok?: boolean;
   data?: T;
@@ -9,68 +5,107 @@ type AppsScriptEnvelope<T> = {
 };
 
 export type RemotePassageRecord = {
-  localDate: string;
+  local_date: string;
   reference: string;
 };
 
 export type RemoteEntryRecord = {
-  id: string;
-  authorId: string;
-  localDate: string;
-  createdAtUtc: string;
+  entry_id: string;
+  member_id: string;
+  local_date: string;
+  created_at: string;
   status?: "draft" | "published";
-  passageReferenceSnapshot: string;
-  memorableLine?: string;
+  passage_reference_snapshot: string;
+  memorable_line?: string;
   reflection: string;
-  application?: string;
+  application_or_prayer?: string;
   replyCount?: number;
 };
 
 export type RemoteReplyRecord = {
-  id: string;
-  entryId: string;
-  authorId: string;
+  reply_id: string;
+  entry_id: string;
+  member_id: string;
   body: string;
-  createdAtUtc: string;
+  created_at: string;
+  updated_at?: string;
 };
 
 export type RemoteMonthSummaryRecord = {
-  localDate: string;
-  entryCount: number;
+  local_date: string;
+  entry_count: number;
+};
+
+type RemoteReadResult<T> = {
+  data: T | null;
+  error: string | null;
 };
 
 function getAppsScriptWebAppUrl() {
-  return process.env.APPS_SCRIPT_WEBAPP_URL?.trim() || null;
+  return process.env.NEXT_PUBLIC_APPS_SCRIPT_WEBAPP_URL?.trim() || null;
 }
 
-export function hasAppsScriptBackend() {
+export function hasAppsScriptPublicUrl() {
   return Boolean(getAppsScriptWebAppUrl());
 }
 
-async function fetchAppsScriptAction<T>(
-  action: string,
-  params: Record<string, string>,
-): Promise<T | null> {
+export function shouldUseAppsScriptRuntime() {
+  return process.env.NODE_ENV === "production" && Boolean(getAppsScriptWebAppUrl());
+}
+
+function createAppsScriptUrl(action: string, params: Record<string, string>) {
   const baseUrl = getAppsScriptWebAppUrl();
 
   if (!baseUrl) {
     return null;
   }
 
-  noStore();
-
   const searchParams = new URLSearchParams({
     action,
     ...params,
   });
 
+  return `${baseUrl}?${searchParams.toString()}`;
+}
+
+function normalizeEnvelope<T>(payload: AppsScriptEnvelope<T> | T) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    !Array.isArray(payload)
+  ) {
+    const envelope = payload as AppsScriptEnvelope<T>;
+
+    if (envelope.ok === false) {
+      throw new Error(envelope.error || "Apps Script responded with an error");
+    }
+
+    return envelope.data ?? null;
+  }
+
+  return payload as T;
+}
+
+async function fetchAppsScriptJson<T>(
+  action: string,
+  params: Record<string, string>,
+): Promise<RemoteReadResult<T>> {
+  const url = createAppsScriptUrl(action, params);
+
+  if (!url) {
+    return {
+      data: null,
+      error: null,
+    };
+  }
+
   try {
-    const response = await fetch(`${baseUrl}?${searchParams.toString()}`, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         Accept: "application/json",
       },
-      cache: "no-store",
     });
 
     if (!response.ok) {
@@ -79,54 +114,131 @@ async function fetchAppsScriptAction<T>(
 
     const payload = (await response.json()) as AppsScriptEnvelope<T> | T;
 
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "data" in payload &&
-      !Array.isArray(payload)
-    ) {
-      const envelope = payload as AppsScriptEnvelope<T>;
-
-      if (envelope.ok === false) {
-        throw new Error(envelope.error || `Apps Script action failed: ${action}`);
-      }
-
-      return envelope.data ?? null;
-    }
-
-    return payload as T;
+    return {
+      data: normalizeEnvelope(payload),
+      error: null,
+    };
   } catch (error) {
-    console.error(`Failed to fetch Apps Script action "${action}"`, error);
-    return null;
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown Apps Script fetch error",
+    };
   }
 }
 
+async function fetchAppsScriptJsonp<T>(
+  action: string,
+  params: Record<string, string>,
+): Promise<RemoteReadResult<T>> {
+  if (typeof window === "undefined") {
+    return {
+      data: null,
+      error: "JSONP is only available in the browser",
+    };
+  }
+
+  const callbackName = `familyQtJsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const url = createAppsScriptUrl(action, {
+    ...params,
+    callback: callbackName,
+  });
+
+  if (!url) {
+    return {
+      data: null,
+      error: null,
+    };
+  }
+
+  return new Promise<RemoteReadResult<T>>((resolve) => {
+    const script = document.createElement("script");
+    const cleanup = () => {
+      delete (window as typeof window & Record<string, unknown>)[callbackName];
+      script.remove();
+    };
+
+    (window as typeof window & Record<string, unknown>)[callbackName] = (
+      payload: AppsScriptEnvelope<T> | T,
+    ) => {
+      try {
+        resolve({
+          data: normalizeEnvelope(payload),
+          error: null,
+        });
+      } catch (error) {
+        resolve({
+          data: null,
+          error: error instanceof Error ? error.message : "Unknown Apps Script JSONP error",
+        });
+      } finally {
+        cleanup();
+      }
+    };
+
+    script.onerror = () => {
+      resolve({
+        data: null,
+        error: "Apps Script JSONP request failed",
+      });
+      cleanup();
+    };
+
+    script.src = url;
+    document.body.appendChild(script);
+  });
+}
+
+async function readAppsScriptAction<T>(
+  action: string,
+  params: Record<string, string>,
+): Promise<RemoteReadResult<T>> {
+  const jsonResult = await fetchAppsScriptJson<T>(action, params);
+
+  if (jsonResult.data !== null || !jsonResult.error) {
+    return jsonResult;
+  }
+
+  const jsonpResult = await fetchAppsScriptJsonp<T>(action, params);
+
+  if (jsonpResult.error && process.env.NODE_ENV !== "production") {
+    console.error(`Apps Script ${action} failed`, {
+      fetchError: jsonResult.error,
+      jsonpError: jsonpResult.error,
+    });
+  }
+
+  return {
+    data: jsonpResult.data,
+    error: jsonpResult.error || jsonResult.error,
+  };
+}
+
 export async function fetchRemotePassageByDate(localDate: string) {
-  return fetchAppsScriptAction<RemotePassageRecord | null>("getPassageByDate", {
+  return readAppsScriptAction<RemotePassageRecord | null>("getPassageByDate", {
     date: localDate,
   });
 }
 
 export async function fetchRemoteEntriesByDate(localDate: string) {
-  return fetchAppsScriptAction<RemoteEntryRecord[]>("getEntriesByDate", {
+  return readAppsScriptAction<RemoteEntryRecord[]>("getEntriesByDate", {
     date: localDate,
   });
 }
 
 export async function fetchRemoteMonthSummary(month: string) {
-  return fetchAppsScriptAction<RemoteMonthSummaryRecord[]>("getMonthSummary", {
+  return readAppsScriptAction<RemoteMonthSummaryRecord[]>("getMonthSummary", {
     month,
   });
 }
 
 export async function fetchRemoteReplies(entryId: string) {
-  return fetchAppsScriptAction<RemoteReplyRecord[]>("getReplies", {
+  return readAppsScriptAction<RemoteReplyRecord[]>("getReplies", {
     entryId,
   });
 }
 
 export async function fetchRemoteEntryById(entryId: string) {
-  return fetchAppsScriptAction<RemoteEntryRecord | null>("getEntryById", {
+  return readAppsScriptAction<RemoteEntryRecord | null>("getEntryById", {
     entryId,
   });
 }

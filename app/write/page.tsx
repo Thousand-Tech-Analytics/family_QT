@@ -1,14 +1,25 @@
+"use client";
+
+import { DevDataSourceIndicator } from "@/components/dev-data-source-indicator";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
+  getMockWritePageData,
   getViewerContext,
-  getWritePageData,
+  loadWritePageData,
+  shouldUseAppsScriptRuntime,
 } from "@/lib/repositories/family-qt-repository";
+import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
-export default async function WritePage() {
+export default function WritePage() {
   const viewer = getViewerContext();
-  const writePageData = await getWritePageData(viewer.localDate);
+  const { data: writePageData, meta } = useRuntimePageData({
+    initialData: getMockWritePageData(viewer.localDate),
+    load: () => loadWritePageData(viewer.localDate),
+    enabled: shouldUseAppsScriptRuntime(),
+    reloadKey: viewer.localDate,
+  });
 
   return (
     <div className="space-y-5">
@@ -88,6 +99,8 @@ export default async function WritePage() {
           </button>
         </div>
       </Card>
+
+      <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
   );
 }

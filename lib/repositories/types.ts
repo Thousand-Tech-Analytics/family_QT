@@ -1,6 +1,7 @@
 export type UserRole = "member" | "admin";
 export type EntryStatus = "draft" | "published";
 export type FamilyStatus = "done" | "draft" | "pending";
+export type DataSourceKind = "apps-script" | "mock";
 
 export type FamilyMember = {
   id: string;
@@ -138,4 +139,14 @@ export type AdminPassagePageData = {
   viewer: ViewerContext;
   todayPassage: PassageScheduleRecord;
   recentSchedule: PassageScheduleRecord[];
+};
+
+export type ReadMeta = {
+  source: DataSourceKind;
+  error: string | null;
+};
+
+export type PageLoadResult<T> = {
+  data: T;
+  meta: ReadMeta;
 };

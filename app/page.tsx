@@ -1,17 +1,29 @@
+"use client";
+
 import Link from "next/link";
+import { DevDataSourceIndicator } from "@/components/dev-data-source-indicator";
 import { EntryCard } from "@/components/entry-card";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import { getFamilyStatusTone, getTodayDateLabel } from "@/lib/format";
 import {
-  getHomePageData,
+  getMockHomePageData,
   getViewerContext,
+  loadHomePageData,
+  shouldUseAppsScriptRuntime,
 } from "@/lib/repositories/family-qt-repository";
+import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
-export default async function HomePage() {
+export default function HomePage() {
   const viewer = getViewerContext();
-  const homePageData = await getHomePageData(viewer.localDate);
+  const initialData = getMockHomePageData(viewer.localDate);
+  const { data: homePageData, meta } = useRuntimePageData({
+    initialData,
+    load: () => loadHomePageData(viewer.localDate),
+    enabled: shouldUseAppsScriptRuntime(),
+    reloadKey: viewer.localDate,
+  });
   const todayLabel = getTodayDateLabel(homePageData.viewer.localDate);
 
   return (
@@ -93,7 +105,7 @@ export default async function HomePage() {
             {homePageData.myEntryStatus === "draft" ? "오늘 나눔 이어쓰기" : "오늘 나눔 쓰기"}
           </Link>
           <Link
-            href={`/entries/${homePageData.myEntryId}`}
+            href={`/entry?id=${encodeURIComponent(homePageData.myEntryId)}`}
             className="inline-flex h-12 items-center justify-center rounded-2xl border border-line bg-white/80 px-5 text-sm font-semibold text-foreground transition hover:border-accent"
           >
             내 글 보기
@@ -112,6 +124,8 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
   );
 }

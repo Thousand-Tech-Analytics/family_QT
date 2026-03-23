@@ -1,14 +1,25 @@
+"use client";
+
+import { DevDataSourceIndicator } from "@/components/dev-data-source-indicator";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
-  getAdminPassagePageData,
+  getMockAdminPassagePageData,
   getViewerContext,
+  loadAdminPassagePageData,
+  shouldUseAppsScriptRuntime,
 } from "@/lib/repositories/family-qt-repository";
+import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
-export default async function AdminPassagesPage() {
+export default function AdminPassagesPage() {
   const viewer = getViewerContext();
-  const adminPageData = await getAdminPassagePageData(viewer.localDate);
+  const { data: adminPageData, meta } = useRuntimePageData({
+    initialData: getMockAdminPassagePageData(viewer.localDate),
+    load: () => loadAdminPassagePageData(viewer.localDate),
+    enabled: shouldUseAppsScriptRuntime(),
+    reloadKey: viewer.localDate,
+  });
 
   return (
     <div className="space-y-5">
@@ -73,6 +84,8 @@ export default async function AdminPassagesPage() {
           ))}
         </div>
       </Card>
+
+      <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
   );
 }
