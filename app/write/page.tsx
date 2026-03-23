@@ -1,9 +1,15 @@
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
-import { mockAppState } from "@/lib/mock-data";
+import {
+  getViewerContext,
+  getWritePageData,
+} from "@/lib/repositories/family-qt-repository";
 
-export default function WritePage() {
+export default async function WritePage() {
+  const viewer = getViewerContext();
+  const writePageData = await getWritePageData(viewer.localDate);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -19,9 +25,9 @@ export default function WritePage() {
         />
         <div className="rounded-3xl border border-line/70 bg-white/80 px-4 py-4">
           <p className="text-sm text-muted">읽기 전용 reference</p>
-          <p className="mt-2 text-2xl font-bold">{mockAppState.todayPassage.reference}</p>
+          <p className="mt-2 text-2xl font-bold">{writePageData.todayPassage.reference}</p>
           <p className="mt-2 text-sm text-muted">
-            local date: {mockAppState.viewer.localDate}
+            local date: {writePageData.viewer.localDate}
           </p>
         </div>
       </Card>
@@ -34,7 +40,7 @@ export default function WritePage() {
           <input
             id="memorable-line"
             name="memorableLine"
-            defaultValue={mockAppState.writeDraft.memorableLine}
+            defaultValue={writePageData.draft.memorableLine}
             placeholder="짧게 붙잡고 싶은 문장을 적어보세요"
             className="h-12 w-full rounded-2xl border border-line bg-white/85 px-4 outline-none transition focus:border-accent"
           />
@@ -47,7 +53,7 @@ export default function WritePage() {
           <textarea
             id="reflection"
             name="reflection"
-            defaultValue={mockAppState.writeDraft.reflection}
+            defaultValue={writePageData.draft.reflection}
             placeholder="오늘 본문을 통해 어떤 마음이 들었는지 천천히 적어보세요"
             className="min-h-44 w-full rounded-3xl border border-line bg-white/85 px-4 py-4 outline-none transition focus:border-accent"
             required
@@ -61,7 +67,7 @@ export default function WritePage() {
           <textarea
             id="application"
             name="application"
-            defaultValue={mockAppState.writeDraft.application}
+            defaultValue={writePageData.draft.application}
             placeholder="작은 적용 한 가지나 오늘의 기도제목을 남겨보세요"
             className="min-h-36 w-full rounded-3xl border border-line bg-white/85 px-4 py-4 outline-none transition focus:border-accent"
           />

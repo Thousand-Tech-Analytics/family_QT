@@ -4,10 +4,15 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import { getFamilyStatusTone, getTodayDateLabel } from "@/lib/format";
-import { mockAppState } from "@/lib/mock-data";
+import {
+  getHomePageData,
+  getViewerContext,
+} from "@/lib/repositories/family-qt-repository";
 
-export default function HomePage() {
-  const todayLabel = getTodayDateLabel(mockAppState.viewer.localDate);
+export default async function HomePage() {
+  const viewer = getViewerContext();
+  const homePageData = await getHomePageData(viewer.localDate);
+  const todayLabel = getTodayDateLabel(homePageData.viewer.localDate);
 
   return (
     <div className="space-y-5">
@@ -16,7 +21,7 @@ export default function HomePage() {
         title="오늘도 조용히 함께 묵상해요"
         description="오늘의 본문을 확인하고, 가족의 나눔을 천천히 읽어보세요."
         action={
-          mockAppState.viewer.isAdmin ? (
+          homePageData.viewer.isAdmin ? (
             <Link
               href="/admin/passages"
               className="inline-flex h-10 items-center rounded-full border border-line px-4 text-sm font-medium text-muted transition hover:border-accent hover:text-accent"
@@ -34,12 +39,12 @@ export default function HomePage() {
             <h2 className="mt-1 text-2xl font-bold">{todayLabel}</h2>
           </div>
           <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
-            {mockAppState.viewer.timezone}
+            {homePageData.viewer.timezone}
           </span>
         </div>
         <div className="rounded-3xl border border-line/80 bg-white/70 px-4 py-4">
           <p className="text-sm text-muted">오늘의 본문</p>
-          <p className="mt-2 text-2xl font-bold">{mockAppState.todayPassage.reference}</p>
+          <p className="mt-2 text-2xl font-bold">{homePageData.todayPassage.reference}</p>
           <p className="mt-2 text-sm leading-6 text-muted">
             관리자가 입력한 reference만 표시합니다. 본문 원문은 V1에서 불러오지 않습니다.
           </p>
@@ -52,7 +57,7 @@ export default function HomePage() {
           description="경쟁 없이, 오늘 어디쯤 와 있는지만 담백하게 살펴봐요."
         />
         <div className="space-y-3">
-          {mockAppState.familyStatus.map((member) => {
+          {homePageData.familyStatus.map((member) => {
             const tone = getFamilyStatusTone(member.status);
 
             return (
@@ -85,10 +90,10 @@ export default function HomePage() {
             href="/write"
             className="inline-flex h-12 items-center justify-center rounded-2xl bg-accent px-5 text-sm font-semibold text-white transition hover:opacity-90"
           >
-            {mockAppState.myEntryStatus === "draft" ? "오늘 나눔 이어쓰기" : "오늘 나눔 쓰기"}
+            {homePageData.myEntryStatus === "draft" ? "오늘 나눔 이어쓰기" : "오늘 나눔 쓰기"}
           </Link>
           <Link
-            href={`/entries/${mockAppState.myEntryId}`}
+            href={`/entries/${homePageData.myEntryId}`}
             className="inline-flex h-12 items-center justify-center rounded-2xl border border-line bg-white/80 px-5 text-sm font-semibold text-foreground transition hover:border-accent"
           >
             내 글 보기
@@ -102,7 +107,7 @@ export default function HomePage() {
           description="가족이 남긴 오늘의 나눔을 차분한 카드로 모아봤어요."
         />
         <div className="space-y-4">
-          {mockAppState.todayFeed.map((entry) => (
+          {homePageData.todayFeed.map((entry) => (
             <EntryCard key={entry.id} entry={entry} />
           ))}
         </div>

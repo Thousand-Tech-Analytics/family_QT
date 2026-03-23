@@ -1,9 +1,9 @@
 import Link from "next/link";
-import type { MockEntry } from "@/lib/mock-data";
+import type { EntryFeedItem } from "@/lib/repositories/types";
 import { Card } from "@/components/ui/card";
 
 type EntryCardProps = {
-  entry: MockEntry;
+  entry: EntryFeedItem;
 };
 
 export function EntryCard({ entry }: EntryCardProps) {
@@ -29,7 +29,7 @@ export function EntryCard({ entry }: EntryCardProps) {
 
         <div className="flex items-center justify-between text-sm text-muted">
           <span>{entry.localDate}</span>
-          <span>답글 {entry.replies.length}</span>
+          <span>답글 {entry.replyCount}</span>
         </div>
       </Card>
     </Link>

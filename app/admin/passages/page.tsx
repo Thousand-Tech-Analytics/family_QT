@@ -1,9 +1,15 @@
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
-import { mockAdminSchedule, mockAppState } from "@/lib/mock-data";
+import {
+  getAdminPassagePageData,
+  getViewerContext,
+} from "@/lib/repositories/family-qt-repository";
 
-export default function AdminPassagesPage() {
+export default async function AdminPassagesPage() {
+  const viewer = getViewerContext();
+  const adminPageData = await getAdminPassagePageData(viewer.localDate);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -15,7 +21,7 @@ export default function AdminPassagesPage() {
       <Card as="form" className="space-y-5 bg-card-strong">
         <SectionTitle
           title="새 본문 입력"
-          description={`현재 mock 관리자: ${mockAppState.viewer.name}`}
+          description={`현재 mock 관리자: ${adminPageData.viewer.name}`}
         />
 
         <div className="space-y-2">
@@ -25,7 +31,7 @@ export default function AdminPassagesPage() {
           <input
             id="schedule-date"
             type="date"
-            defaultValue={mockAppState.todayPassage.date}
+            defaultValue={adminPageData.todayPassage.localDate}
             className="h-12 w-full rounded-2xl border border-line bg-white/85 px-4 outline-none transition focus:border-accent"
           />
         </div>
@@ -36,7 +42,7 @@ export default function AdminPassagesPage() {
           </label>
           <input
             id="passage-reference"
-            defaultValue={mockAppState.todayPassage.reference}
+            defaultValue={adminPageData.todayPassage.reference}
             placeholder="예: 시편 24:1-7"
             className="h-12 w-full rounded-2xl border border-line bg-white/85 px-4 outline-none transition focus:border-accent"
           />
@@ -56,12 +62,12 @@ export default function AdminPassagesPage() {
           description="수기로 입력한 본문 reference 목록을 단순한 리스트로 보여줍니다."
         />
         <div className="space-y-3">
-          {mockAdminSchedule.map((item) => (
+          {adminPageData.recentSchedule.map((item) => (
             <div
-              key={item.date}
+              key={item.localDate}
               className="rounded-2xl border border-line/70 bg-white/75 px-4 py-4"
             >
-              <p className="text-sm text-muted">{item.date}</p>
+              <p className="text-sm text-muted">{item.localDate}</p>
               <p className="mt-1 font-semibold">{item.reference}</p>
             </div>
           ))}

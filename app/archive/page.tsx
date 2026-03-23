@@ -2,9 +2,15 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
-import { mockArchiveGroups } from "@/lib/mock-data";
+import {
+  getArchivePageData,
+  getViewerContext,
+} from "@/lib/repositories/family-qt-repository";
 
-export default function ArchivePage() {
+export default async function ArchivePage() {
+  const viewer = getViewerContext();
+  const archivePageData = await getArchivePageData(viewer.localDate.slice(0, 7));
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -14,8 +20,8 @@ export default function ArchivePage() {
       />
 
       <div className="space-y-4">
-        {mockArchiveGroups.map((group) => (
-          <Card key={group.date} className="space-y-4">
+        {archivePageData.groups.map((group) => (
+          <Card key={group.localDate} className="space-y-4">
             <SectionTitle title={group.dateLabel} description={`${group.items.length}개의 나눔`} />
             <div className="space-y-3">
               {group.items.map((entry) => (

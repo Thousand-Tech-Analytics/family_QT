@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
-import { getEntryById } from "@/lib/mock-data";
+import { getEntryById } from "@/lib/repositories/family-qt-repository";
 
 type EntryPageProps = {
   params: Promise<{
@@ -12,7 +12,7 @@ type EntryPageProps = {
 
 export default async function EntryDetailPage({ params }: EntryPageProps) {
   const { id } = await params;
-  const entry = getEntryById(id);
+  const entry = await getEntryById(id);
 
   if (!entry) {
     notFound();
