@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { PageLoadResult, ReadMeta } from "@/lib/repositories/types";
 
 type UseRuntimePageDataOptions<T> = {
@@ -21,6 +21,14 @@ export function useRuntimePageData<T>({
   const [data, setData] = useState(initialData);
   const [meta, setMeta] = useState<ReadMeta>(initialMeta ?? { source: "mock", error: null });
   const [isLoading, setIsLoading] = useState(false);
+  const initialDataRef = useRef(initialData);
+  const initialMetaRef = useRef<ReadMeta>(initialMeta ?? { source: "mock", error: null });
+
+  useEffect(() => {
+    initialDataRef.current = initialData;
+    initialMetaRef.current = initialMeta ?? { source: "mock", error: null };
+  }, [initialData, initialMeta]);
+
   const runLoad = useEffectEvent(async (isActive: () => boolean) => {
     if (!isActive()) {
       return;
@@ -51,8 +59,8 @@ export function useRuntimePageData<T>({
   });
 
   useEffect(() => {
-    setData(initialData);
-    setMeta(initialMeta ?? { source: "mock", error: null });
+    setData(initialDataRef.current);
+    setMeta(initialMetaRef.current);
 
     if (!enabled) {
       setIsLoading(false);
@@ -66,7 +74,7 @@ export function useRuntimePageData<T>({
     return () => {
       isCancelled = true;
     };
-  }, [enabled, initialData, initialMeta, reloadKey]);
+  }, [enabled, reloadKey]);
 
   return {
     data,

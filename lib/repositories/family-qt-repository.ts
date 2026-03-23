@@ -179,7 +179,7 @@ function getInitialHomePageData(localDate: string): HomePageData {
     todayPassage: getInitialPassage(localDate),
     familyStatus: buildFamilyStatus([], localDate),
     myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
-    myEntryId: "entry-pending",
+    myEntryId: null,
     todayFeed: [],
   };
 }
@@ -546,7 +546,7 @@ export function getMockHomePageData(localDate: string): HomePageData {
     todayPassage: getMockTodayPassage(localDate),
     familyStatus: buildFamilyStatus(todayFeed, localDate),
     myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
-    myEntryId: myPublishedEntry?.id ?? "entry-today-jiho",
+    myEntryId: myPublishedEntry?.id ?? null,
     todayFeed,
   };
 }
@@ -691,7 +691,7 @@ export async function loadHomePageData(localDate: string): Promise<PageLoadResul
       todayPassage: passageResult.data,
       familyStatus: buildFamilyStatus(entriesResult.data, localDate),
       myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
-      myEntryId: myPublishedEntry?.id ?? "entry-today-jiho",
+      myEntryId: myPublishedEntry?.id ?? null,
       todayFeed: entriesResult.data,
     },
     meta: mergeMeta(passageResult.meta, entriesResult.meta),

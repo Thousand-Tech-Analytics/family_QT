@@ -24,6 +24,7 @@ export function EntryDetailPageClient() {
     enabled: shouldUseAppsScriptRuntime() && Boolean(entryId),
     reloadKey: entryId ?? "missing-entry-id",
   });
+  const hasRemoteError = meta.source === "apps-script" && Boolean(meta.error);
 
   if (isLoading) {
     return (
@@ -41,10 +42,16 @@ export function EntryDetailPageClient() {
     return (
       <div className="space-y-5">
         <Card className="space-y-4 text-center">
-          <p className="text-sm text-muted">찾을 수 없는 나눔입니다.</p>
-          <h1 className="text-2xl font-bold">요청한 글이 아직 준비되지 않았어요</h1>
+          <p className="text-sm text-muted">
+            {hasRemoteError ? "Apps Script 데이터를 읽지 못했어요." : "찾을 수 없는 나눔입니다."}
+          </p>
+          <h1 className="text-2xl font-bold">
+            {hasRemoteError ? "요청한 글을 불러오지 못했어요" : "요청한 글이 아직 준비되지 않았어요"}
+          </h1>
           <p className="text-sm leading-6 text-muted">
-            링크가 잘못되었거나, Apps Script에서 아직 데이터를 읽지 못했을 수 있습니다.
+            {hasRemoteError
+              ? meta.error
+              : "링크가 잘못되었거나, Apps Script에서 아직 데이터를 읽지 못했을 수 있습니다."}
           </p>
           <Link
             href="/"

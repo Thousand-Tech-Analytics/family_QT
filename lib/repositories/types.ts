@@ -116,7 +116,7 @@ export type HomePageData = {
   todayPassage: PassageScheduleRecord;
   familyStatus: FamilyStatusItem[];
   myEntryStatus: EntryStatus;
-  myEntryId: string;
+  myEntryId: string | null;
   todayFeed: EntryFeedItem[];
 };
 

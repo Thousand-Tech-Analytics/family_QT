@@ -20,6 +20,7 @@ export default function WritePage() {
     enabled: shouldUseAppsScriptRuntime(),
     reloadKey: viewer.localDate,
   });
+  const hasRemoteError = meta.source === "apps-script" && Boolean(meta.error);
 
   return (
     <div className="space-y-5">
@@ -28,6 +29,14 @@ export default function WritePage() {
         title="오늘 마음에 남은 것을 적어보세요"
         description="오늘의 본문을 바탕으로 차분히 나눔을 적어보세요."
       />
+
+      {hasRemoteError ? (
+        <Card className="border-accent/20 bg-[rgba(143,106,75,0.08)] text-sm leading-6 text-muted">
+          오늘의 본문을 Apps Script에서 읽지 못했어요.
+          <br />
+          {meta.error}
+        </Card>
+      ) : null}
 
       <Card className="space-y-4 bg-card-strong">
         <SectionTitle

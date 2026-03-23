@@ -1,5 +1,6 @@
 "use client";
 
+import { hasAppsScriptPublicUrl } from "@/lib/repositories/apps-script-source";
 import type { ReadMeta } from "@/lib/repositories/types";
 
 type DevDataSourceIndicatorProps = ReadMeta;
@@ -8,14 +9,14 @@ export function DevDataSourceIndicator({
   source,
   error,
 }: DevDataSourceIndicatorProps) {
-  if (process.env.NODE_ENV === "production") {
-    return null;
-  }
+  const hasUrl = hasAppsScriptPublicUrl();
 
   return (
-    <div className="fixed bottom-24 right-4 z-30 rounded-full border border-line bg-[rgba(255,251,245,0.92)] px-3 py-2 text-[11px] font-semibold text-muted shadow-[0_10px_24px_rgba(78,57,39,0.12)] backdrop-blur">
-      <span>data: {source}</span>
-      {error ? <span className="ml-2 text-[10px] text-accent">error</span> : null}
+    <div className="fixed bottom-24 right-4 z-30 max-w-[260px] rounded-2xl border border-line bg-[rgba(255,251,245,0.94)] px-3 py-3 text-[11px] font-semibold text-muted shadow-[0_10px_24px_rgba(78,57,39,0.12)] backdrop-blur">
+      <p>hosting: github-pages</p>
+      <p>apps script url present: {hasUrl ? "yes" : "no"}</p>
+      <p>data source: {source}</p>
+      <p>remote fetch failed: {error ? "yes" : "no"}</p>
     </div>
   );
 }

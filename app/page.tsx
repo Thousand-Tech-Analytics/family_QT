@@ -25,6 +25,10 @@ export default function HomePage() {
     reloadKey: viewer.localDate,
   });
   const todayLabel = getTodayDateLabel(homePageData.viewer.localDate);
+  const hasRemoteError = meta.source === "apps-script" && Boolean(meta.error);
+  const myEntryHref = homePageData.myEntryId
+    ? `/entry?id=${encodeURIComponent(homePageData.myEntryId)}`
+    : "/write";
 
   return (
     <div className="space-y-5">
@@ -62,6 +66,14 @@ export default function HomePage() {
           </p>
         </div>
       </Card>
+
+      {hasRemoteError ? (
+        <Card className="border-accent/20 bg-[rgba(143,106,75,0.08)] text-sm leading-6 text-muted">
+          오늘 데이터를 Apps Script에서 읽지 못했어요.
+          <br />
+          {meta.error}
+        </Card>
+      ) : null}
 
       <Card className="space-y-4">
         <SectionTitle
@@ -105,10 +117,10 @@ export default function HomePage() {
             {homePageData.myEntryStatus === "draft" ? "오늘 나눔 이어쓰기" : "오늘 나눔 쓰기"}
           </Link>
           <Link
-            href={`/entry?id=${encodeURIComponent(homePageData.myEntryId)}`}
+            href={myEntryHref}
             className="inline-flex h-12 items-center justify-center rounded-2xl border border-line bg-white/80 px-5 text-sm font-semibold text-foreground transition hover:border-accent"
           >
-            내 글 보기
+            {homePageData.myEntryId ? "내 글 보기" : "쓰기 화면으로"}
           </Link>
         </div>
       </Card>
@@ -124,11 +136,13 @@ export default function HomePage() {
               <EntryCard key={entry.id} entry={entry} />
             ))}
           </div>
-        ) : (
+      ) : (
           <Card className="text-sm leading-6 text-muted">
-            오늘 나눔을 불러오는 중이거나 아직 등록된 글이 없어요.
+            {hasRemoteError
+              ? "오늘 나눔을 Apps Script에서 불러오지 못했어요."
+              : "오늘 나눔을 불러오는 중이거나 아직 등록된 글이 없어요."}
           </Card>
-        )}
+      )}
       </section>
 
       <DevDataSourceIndicator source={meta.source} error={meta.error} />

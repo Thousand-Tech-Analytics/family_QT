@@ -22,6 +22,7 @@ export default function ArchivePage() {
     enabled: shouldUseAppsScriptRuntime(),
     reloadKey: month,
   });
+  const hasRemoteError = meta.source === "apps-script" && Boolean(meta.error);
 
   return (
     <div className="space-y-5">
@@ -30,6 +31,14 @@ export default function ArchivePage() {
         title="지나간 나눔을 다시 펼쳐봐요"
         description="V1은 단순한 날짜 그룹 리스트부터 시작합니다."
       />
+
+      {hasRemoteError ? (
+        <Card className="border-accent/20 bg-[rgba(143,106,75,0.08)] text-sm leading-6 text-muted">
+          기록 데이터를 Apps Script에서 읽지 못했어요.
+          <br />
+          {meta.error}
+        </Card>
+      ) : null}
 
       {archivePageData.groups.length > 0 ? (
         <div className="space-y-4">
@@ -61,7 +70,9 @@ export default function ArchivePage() {
         </div>
       ) : (
         <Card className="text-sm leading-6 text-muted">
-          이 달의 기록을 불러오는 중이거나 아직 표시할 나눔이 없어요.
+          {hasRemoteError
+            ? "이 달의 기록을 Apps Script에서 불러오지 못했어요."
+            : "이 달의 기록을 불러오는 중이거나 아직 표시할 나눔이 없어요."}
         </Card>
       )}
 
