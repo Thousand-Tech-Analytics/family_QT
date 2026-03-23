@@ -41,6 +41,11 @@ type RemoteReadResult<T> = {
   error: string | null;
 };
 
+type RemoteWriteResult<T> = {
+  data: T | null;
+  error: string | null;
+};
+
 let hasLoggedUrlDetection = false;
 
 function debugLog(message: string, details?: unknown) {
@@ -164,6 +169,62 @@ async function fetchAppsScriptJson<T>(
   }
 }
 
+async function postAppsScriptJson<T>(
+  action: string,
+  params: Record<string, string>,
+): Promise<RemoteWriteResult<T>> {
+  const baseUrl = getAppsScriptWebAppUrl();
+
+  debugLog("Preparing remote write", {
+    action,
+    hasUrl: Boolean(baseUrl),
+  });
+
+  if (!baseUrl) {
+    return {
+      data: null,
+      error: null,
+    };
+  }
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: new URLSearchParams({
+        action,
+        ...params,
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Apps Script responded with ${response.status}`);
+    }
+
+    const payload = (await response.json()) as AppsScriptEnvelope<T> | T;
+
+    debugLog("Remote write succeeded", { action, strategy: "post-json" });
+
+    return {
+      data: normalizeEnvelope(payload),
+      error: null,
+    };
+  } catch (error) {
+    debugLog("Remote write failed", {
+      action,
+      strategy: "post-json",
+      error: error instanceof Error ? error.message : "Unknown Apps Script write error",
+    });
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown Apps Script write error",
+    };
+  }
+}
+
 async function fetchAppsScriptJsonp<T>(
   action: string,
   params: Record<string, string>,
@@ -258,6 +319,32 @@ async function readAppsScriptAction<T>(
   };
 }
 
+async function writeAppsScriptAction<T>(
+  action: string,
+  params: Record<string, string>,
+): Promise<RemoteWriteResult<T>> {
+  const postResult = await postAppsScriptJson<T>(action, params);
+
+  if (postResult.data !== null || !postResult.error) {
+    return postResult;
+  }
+
+  const jsonpResult = await fetchAppsScriptJsonp<T>(action, params);
+
+  if (jsonpResult.error) {
+    debugLog("All remote write strategies failed", {
+      action,
+      postError: postResult.error,
+      jsonpError: jsonpResult.error,
+    });
+  }
+
+  return {
+    data: jsonpResult.data,
+    error: jsonpResult.error || postResult.error,
+  };
+}
+
 export async function fetchRemotePassageByDate(localDate: string) {
   return readAppsScriptAction<RemotePassageRecord | null>("getPassageByDate", {
     date: localDate,
@@ -285,5 +372,39 @@ export async function fetchRemoteReplies(entryId: string) {
 export async function fetchRemoteEntryById(entryId: string) {
   return readAppsScriptAction<RemoteEntryRecord | null>("getEntryById", {
     entryId,
+  });
+}
+
+export async function saveRemoteEntry(payload: {
+  entryId?: string;
+  memberId: string;
+  localDate: string;
+  status: "draft" | "published";
+  passageReferenceSnapshot: string;
+  memorableLine: string;
+  reflection: string;
+  applicationOrPrayer: string;
+}) {
+  return writeAppsScriptAction<RemoteEntryRecord>("saveEntry", {
+    entryId: payload.entryId ?? "",
+    memberId: payload.memberId,
+    localDate: payload.localDate,
+    status: payload.status,
+    passageReferenceSnapshot: payload.passageReferenceSnapshot,
+    memorableLine: payload.memorableLine,
+    reflection: payload.reflection,
+    applicationOrPrayer: payload.applicationOrPrayer,
+  });
+}
+
+export async function saveRemoteReply(payload: {
+  entryId: string;
+  memberId: string;
+  body: string;
+}) {
+  return writeAppsScriptAction<RemoteReplyRecord>("addReply", {
+    entryId: payload.entryId,
+    memberId: payload.memberId,
+    body: payload.body,
   });
 }

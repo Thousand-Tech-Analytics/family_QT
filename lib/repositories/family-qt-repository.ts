@@ -5,18 +5,15 @@ import {
   fetchRemotePassageByDate,
   fetchRemoteReplies,
   hasAppsScriptPublicUrl,
+  saveRemoteEntry,
+  saveRemoteReply,
   shouldUseAppsScriptRuntime,
   type RemoteEntryRecord,
   type RemoteMonthSummaryRecord,
   type RemotePassageRecord,
   type RemoteReplyRecord,
 } from "@/lib/repositories/apps-script-source";
-import {
-  formatArchiveDateLabel,
-  formatTimeLabel,
-  sortByCreatedAtDesc,
-  sortLocalDatesDesc,
-} from "@/lib/format";
+import { formatArchiveDateLabel, formatTimeLabel, sortLocalDatesDesc } from "@/lib/format";
 import {
   entryRecords,
   familyMembers,
@@ -45,6 +42,19 @@ import type {
   ViewerContext,
   WritePageData,
 } from "@/lib/repositories/types";
+
+type StoredEntryRecord = {
+  id: string;
+  memberId: string;
+  localDate: string;
+  createdAtUtc: string;
+  status: "draft" | "published";
+  passageReferenceSnapshot: string;
+  memorableLine: string;
+  reflection: string;
+  application: string;
+  replyCount: number;
+};
 
 function createMeta(source: DataSourceKind, error: string | null = null): ReadMeta {
   return {
@@ -104,8 +114,38 @@ function toPassageRecord(record: RemotePassageRecord): PassageScheduleRecord {
   };
 }
 
-function toMockEntryFeedItem(entry: EntryRecord): EntryFeedItem {
-  const author = getFamilyMemberById(entry.authorId);
+function toStoredRemoteEntryRecord(entry: RemoteEntryRecord): StoredEntryRecord {
+  return {
+    id: entry.entry_id,
+    memberId: entry.member_id,
+    localDate: entry.local_date,
+    createdAtUtc: entry.created_at,
+    status: entry.status ?? "published",
+    passageReferenceSnapshot: entry.passage_reference_snapshot,
+    memorableLine: entry.memorable_line ?? "",
+    reflection: entry.reflection,
+    application: entry.application_or_prayer ?? "",
+    replyCount: entry.replyCount ?? 0,
+  };
+}
+
+function toStoredMockEntryRecord(entry: EntryRecord): StoredEntryRecord {
+  return {
+    id: entry.id,
+    memberId: entry.authorId,
+    localDate: entry.localDate,
+    createdAtUtc: entry.createdAtUtc,
+    status: entry.status,
+    passageReferenceSnapshot: entry.passageReferenceSnapshot,
+    memorableLine: entry.memorableLine,
+    reflection: entry.reflection,
+    application: entry.application,
+    replyCount: getMockReplyCount(entry.id),
+  };
+}
+
+function toEntryFeedItem(entry: StoredEntryRecord): EntryFeedItem {
+  const author = getFamilyMemberById(entry.memberId);
 
   return {
     id: entry.id,
@@ -117,25 +157,16 @@ function toMockEntryFeedItem(entry: EntryRecord): EntryFeedItem {
     memorableLine: entry.memorableLine,
     reflection: entry.reflection,
     application: entry.application,
-    replyCount: getMockReplyCount(entry.id),
+    replyCount: entry.replyCount,
   };
 }
 
-function toRemoteEntryFeedItem(entry: RemoteEntryRecord): EntryFeedItem {
-  const author = getFamilyMemberById(entry.member_id);
+function toMockEntryFeedItem(entry: EntryRecord): EntryFeedItem {
+  return toEntryFeedItem(toStoredMockEntryRecord(entry));
+}
 
-  return {
-    id: entry.entry_id,
-    author,
-    localDate: entry.local_date,
-    createdAtUtc: entry.created_at,
-    createdTimeLabel: formatTimeLabel(entry.created_at, author.timezone),
-    passageReference: entry.passage_reference_snapshot,
-    memorableLine: entry.memorable_line ?? "",
-    reflection: entry.reflection,
-    application: entry.application_or_prayer ?? "",
-    replyCount: entry.replyCount ?? 0,
-  };
+function toRemoteEntryFeedItem(entry: RemoteEntryRecord): EntryFeedItem {
+  return toEntryFeedItem(toStoredRemoteEntryRecord(entry));
 }
 
 function toReplyItem(record: RemoteReplyRecord | (typeof replyRecords)[number]): ReplyItem {
@@ -171,14 +202,91 @@ function getInitialPassage(localDate: string): PassageScheduleRecord {
   };
 }
 
-function getInitialHomePageData(localDate: string): HomePageData {
-  const viewer = getViewerContext();
+function getLatestEntryForMember(records: StoredEntryRecord[], memberId: string) {
+  return (
+    records
+      .filter((entry) => entry.memberId === memberId)
+      .sort((left, right) => right.createdAtUtc.localeCompare(left.createdAtUtc))[0] ?? null
+  );
+}
 
+function toPublishedFeed(records: StoredEntryRecord[]) {
+  return records
+    .filter((entry) => entry.status === "published")
+    .sort((left, right) => right.createdAtUtc.localeCompare(left.createdAtUtc))
+    .map(toEntryFeedItem);
+}
+
+function getMockStoredEntriesByDate(localDate: string): StoredEntryRecord[] {
+  const records = entryRecords
+    .filter((entry) => entry.localDate === localDate)
+    .map(toStoredMockEntryRecord);
+
+  if (viewerDraft.localDate === localDate) {
+    const existingViewerEntry = getLatestEntryForMember(records, viewerContext.id);
+
+    if (existingViewerEntry) {
+      existingViewerEntry.status = "draft";
+      existingViewerEntry.passageReferenceSnapshot = viewerDraft.passageReference;
+      existingViewerEntry.memorableLine = viewerDraft.memorableLine;
+      existingViewerEntry.reflection = viewerDraft.reflection;
+      existingViewerEntry.application = viewerDraft.application;
+    } else {
+      records.push({
+        id: "draft-local-viewer",
+        memberId: viewerContext.id,
+        localDate,
+        createdAtUtc: new Date(`${localDate}T12:00:00Z`).toISOString(),
+        status: "draft",
+        passageReferenceSnapshot: viewerDraft.passageReference,
+        memorableLine: viewerDraft.memorableLine,
+        reflection: viewerDraft.reflection,
+        application: viewerDraft.application,
+        replyCount: 0,
+      });
+    }
+  }
+
+  return records.sort((left, right) => right.createdAtUtc.localeCompare(left.createdAtUtc));
+}
+
+function buildFamilyStatus(records: StoredEntryRecord[]): FamilyStatusItem[] {
+  return familyMembers.map((member) => {
+    const memberEntry = getLatestEntryForMember(records, member.id);
+
+    if (memberEntry?.status === "draft") {
+      return {
+        userId: member.id,
+        name: member.name,
+        status: "draft",
+        note: "임시저장한 글이 있어 이어서 쓸 수 있어요.",
+      };
+    }
+
+    if (memberEntry?.status === "published") {
+      return {
+        userId: member.id,
+        name: member.name,
+        status: "done",
+        note: "오늘 나눔을 조용히 남겼어요.",
+      };
+    }
+
+    return {
+      userId: member.id,
+      name: member.name,
+      status: "pending",
+      note: "아직 시작 전이에요.",
+    };
+  });
+}
+
+function getInitialHomePageData(localDate: string): HomePageData {
   return {
-    viewer,
+    viewer: getViewerContext(),
     todayPassage: getInitialPassage(localDate),
-    familyStatus: buildFamilyStatus([], localDate),
-    myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
+    familyStatus: buildFamilyStatus([]),
+    myEntryStatus: "published",
     myEntryId: null,
     todayFeed: [],
   };
@@ -188,6 +296,8 @@ function getInitialWritePageData(localDate: string): WritePageData {
   return {
     viewer: getViewerContext(),
     todayPassage: getInitialPassage(localDate),
+    entryId: null,
+    entryStatus: null,
     draft: {
       localDate,
       passageReference: "",
@@ -210,10 +320,7 @@ function getMockTodayPassage(localDate: string): PassageScheduleRecord {
 }
 
 function getMockEntriesByDate(localDate: string): EntryFeedItem[] {
-  return entryRecords
-    .filter((entry) => entry.localDate === localDate && entry.status === "published")
-    .sort(sortByCreatedAtDesc)
-    .map(toMockEntryFeedItem);
+  return toPublishedFeed(getMockStoredEntriesByDate(localDate));
 }
 
 function getMockMonthSummary(month: string): MonthSummary {
@@ -253,46 +360,6 @@ function getMockEntryById(entryId: string): EntryDetail | null {
     ...toMockEntryFeedItem(record),
     replies: getMockReplies(entryId),
   };
-}
-
-function buildFamilyStatus(todayFeed: EntryFeedItem[], localDate: string): FamilyStatusItem[] {
-  return familyMembers.map((member) => {
-    if (member.id === viewerContext.id && viewerDraft.localDate === localDate) {
-      return {
-        userId: member.id,
-        name: member.name,
-        status: "draft",
-        note: "임시저장한 글이 있어 이어서 쓸 수 있어요.",
-      };
-    }
-
-    const hasPublishedEntry = todayFeed.some((entry) => entry.author.id === member.id);
-
-    if (hasPublishedEntry) {
-      return {
-        userId: member.id,
-        name: member.name,
-        status: "done",
-        note: "오늘 나눔을 조용히 남겼어요.",
-      };
-    }
-
-    if (member.id === "eunseo") {
-      return {
-        userId: member.id,
-        name: member.name,
-        status: "pending",
-        note: "오늘은 조금 늦게 묵상할 예정이에요.",
-      };
-    }
-
-    return {
-      userId: member.id,
-      name: member.name,
-      status: "pending",
-      note: "아직 시작 전이에요.",
-    };
-  });
 }
 
 async function readPassage(localDate: string): Promise<PageLoadResult<PassageScheduleRecord>> {
@@ -336,13 +403,13 @@ async function readPassage(localDate: string): Promise<PageLoadResult<PassageSch
   };
 }
 
-async function readEntriesByDate(localDate: string): Promise<PageLoadResult<EntryFeedItem[]>> {
+async function readStoredEntriesByDate(localDate: string): Promise<PageLoadResult<StoredEntryRecord[]>> {
   if (!shouldUseAppsScriptRuntime()) {
-    debugFallback("using mock entries because production Apps Script runtime is disabled", {
+    debugFallback("using mock stored entries because production Apps Script runtime is disabled", {
       hasPublicUrl: hasAppsScriptPublicUrl(),
     });
     return {
-      data: getMockEntriesByDate(localDate),
+      data: getMockStoredEntriesByDate(localDate),
       meta: createMeta("mock"),
     };
   }
@@ -351,16 +418,13 @@ async function readEntriesByDate(localDate: string): Promise<PageLoadResult<Entr
 
   if (remoteEntries.data) {
     return {
-      data: remoteEntries.data
-        .filter((entry) => (entry.status ?? "published") === "published")
-        .sort((left, right) => right.created_at.localeCompare(left.created_at))
-        .map(toRemoteEntryFeedItem),
+      data: remoteEntries.data.map(toStoredRemoteEntryRecord),
       meta: createMeta("apps-script", remoteEntries.error),
     };
   }
 
   if (!shouldAllowMockFallback()) {
-    debugFallback("production Apps Script entries failed and mock fallback is disabled", {
+    debugFallback("production Apps Script stored entries failed and mock fallback is disabled", {
       hasPublicUrl: hasAppsScriptPublicUrl(),
       error: remoteEntries.error,
     });
@@ -370,13 +434,22 @@ async function readEntriesByDate(localDate: string): Promise<PageLoadResult<Entr
     };
   }
 
-  debugFallback("using mock entries because local development fallback is allowed", {
+  debugFallback("using mock stored entries because local development fallback is allowed", {
     hasPublicUrl: hasAppsScriptPublicUrl(),
     error: remoteEntries.error,
   });
   return {
-    data: getMockEntriesByDate(localDate),
+    data: getMockStoredEntriesByDate(localDate),
     meta: createMeta("mock", remoteEntries.error),
+  };
+}
+
+async function readEntriesByDate(localDate: string): Promise<PageLoadResult<EntryFeedItem[]>> {
+  const entriesResult = await readStoredEntriesByDate(localDate);
+
+  return {
+    data: toPublishedFeed(entriesResult.data),
+    meta: entriesResult.meta,
   };
 }
 
@@ -538,16 +611,16 @@ export function getFamilyMembers(): FamilyMember[] {
 
 export function getMockHomePageData(localDate: string): HomePageData {
   const viewer = getViewerContext();
-  const todayFeed = getMockEntriesByDate(localDate);
-  const myPublishedEntry = todayFeed.find((entry) => entry.author.id === viewer.id);
+  const todayEntries = getMockStoredEntriesByDate(localDate);
+  const myEntry = getLatestEntryForMember(todayEntries, viewer.id);
 
   return {
     viewer,
     todayPassage: getMockTodayPassage(localDate),
-    familyStatus: buildFamilyStatus(todayFeed, localDate),
-    myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
-    myEntryId: myPublishedEntry?.id ?? null,
-    todayFeed,
+    familyStatus: buildFamilyStatus(todayEntries),
+    myEntryStatus: myEntry?.status === "draft" ? "draft" : "published",
+    myEntryId: myEntry?.status === "published" ? myEntry.id : null,
+    todayFeed: toPublishedFeed(todayEntries),
   };
 }
 
@@ -557,13 +630,22 @@ export function getInitialHomePageDataForRuntime(localDate: string): HomePageDat
 
 export function getMockWritePageData(localDate: string): WritePageData {
   const todayPassage = getMockTodayPassage(localDate);
+  const viewerEntry = getLatestEntryForMember(getMockStoredEntriesByDate(localDate), viewerContext.id);
 
   return {
     viewer: getViewerContext(),
     todayPassage,
+    entryId: viewerEntry?.id ?? null,
+    entryStatus: viewerEntry?.status ?? null,
     draft:
-      viewerDraft.localDate === localDate
-        ? viewerDraft
+      viewerEntry
+        ? {
+            localDate,
+            passageReference: viewerEntry.passageReferenceSnapshot,
+            memorableLine: viewerEntry.memorableLine,
+            reflection: viewerEntry.reflection,
+            application: viewerEntry.application,
+          }
         : {
             localDate,
             passageReference: todayPassage.reference,
@@ -614,7 +696,7 @@ export function getMockEntryDetailPageData(entryId: string | null) {
 }
 
 export function getInitialEntryDetailPageDataForRuntime() {
-  return shouldUseAppsScriptRuntime() ? null : null;
+  return null;
 }
 
 export async function getTodayPassage(localDate: string): Promise<PassageScheduleRecord> {
@@ -638,6 +720,27 @@ export async function getReplies(entryId: string): Promise<ReplyItem[]> {
 }
 
 export async function saveEntry(payload: SaveEntryPayload): Promise<EntryFeedItem> {
+  if (shouldUseAppsScriptRuntime()) {
+    const remoteSave = await saveRemoteEntry({
+      entryId: payload.id,
+      memberId: payload.authorId,
+      localDate: payload.localDate,
+      status: payload.status,
+      passageReferenceSnapshot: payload.passageReferenceSnapshot,
+      memorableLine: payload.memorableLine,
+      reflection: payload.reflection,
+      applicationOrPrayer: payload.application,
+    });
+
+    if (remoteSave.data) {
+      return toRemoteEntryFeedItem(remoteSave.data);
+    }
+
+    if (!shouldAllowMockFallback()) {
+      throw new Error(remoteSave.error || "Failed to save entry");
+    }
+  }
+
   const nextRecord: EntryRecord = {
     id: payload.id ?? `entry-${Date.now()}`,
     authorId: payload.authorId,
@@ -658,10 +761,32 @@ export async function saveEntry(payload: SaveEntryPayload): Promise<EntryFeedIte
     entryRecords.push(nextRecord);
   }
 
+  viewerDraft.localDate = payload.localDate;
+  viewerDraft.passageReference = payload.passageReferenceSnapshot;
+  viewerDraft.memorableLine = payload.memorableLine;
+  viewerDraft.reflection = payload.reflection;
+  viewerDraft.application = payload.application;
+
   return toMockEntryFeedItem(nextRecord);
 }
 
 export async function addReply(payload: AddReplyPayload): Promise<ReplyItem> {
+  if (shouldUseAppsScriptRuntime()) {
+    const remoteReply = await saveRemoteReply({
+      entryId: payload.entryId,
+      memberId: payload.authorId,
+      body: payload.body,
+    });
+
+    if (remoteReply.data) {
+      return toReplyItem(remoteReply.data);
+    }
+
+    if (!shouldAllowMockFallback()) {
+      throw new Error(remoteReply.error || "Failed to add reply");
+    }
+  }
+
   const nextReply = {
     id: `reply-${Date.now()}`,
     entryId: payload.entryId,
@@ -682,17 +807,17 @@ export async function getEntryById(entryId: string): Promise<EntryDetail | null>
 export async function loadHomePageData(localDate: string): Promise<PageLoadResult<HomePageData>> {
   const viewer = getViewerContext();
   const passageResult = await readPassage(localDate);
-  const entriesResult = await readEntriesByDate(localDate);
-  const myPublishedEntry = entriesResult.data.find((entry) => entry.author.id === viewer.id);
+  const entriesResult = await readStoredEntriesByDate(localDate);
+  const myEntry = getLatestEntryForMember(entriesResult.data, viewer.id);
 
   return {
     data: {
       viewer,
       todayPassage: passageResult.data,
-      familyStatus: buildFamilyStatus(entriesResult.data, localDate),
-      myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
-      myEntryId: myPublishedEntry?.id ?? null,
-      todayFeed: entriesResult.data,
+      familyStatus: buildFamilyStatus(entriesResult.data),
+      myEntryStatus: myEntry?.status === "draft" ? "draft" : "published",
+      myEntryId: myEntry?.status === "published" ? myEntry.id : null,
+      todayFeed: toPublishedFeed(entriesResult.data),
     },
     meta: mergeMeta(passageResult.meta, entriesResult.meta),
   };
@@ -700,14 +825,24 @@ export async function loadHomePageData(localDate: string): Promise<PageLoadResul
 
 export async function loadWritePageData(localDate: string): Promise<PageLoadResult<WritePageData>> {
   const passageResult = await readPassage(localDate);
+  const entriesResult = await readStoredEntriesByDate(localDate);
+  const viewerEntry = getLatestEntryForMember(entriesResult.data, viewerContext.id);
 
   return {
     data: {
       viewer: getViewerContext(),
       todayPassage: passageResult.data,
+      entryId: viewerEntry?.id ?? null,
+      entryStatus: viewerEntry?.status ?? null,
       draft:
-        viewerDraft.localDate === localDate
-          ? viewerDraft
+        viewerEntry
+          ? {
+              localDate,
+              passageReference: viewerEntry.passageReferenceSnapshot,
+              memorableLine: viewerEntry.memorableLine,
+              reflection: viewerEntry.reflection,
+              application: viewerEntry.application,
+            }
           : {
               localDate,
               passageReference: passageResult.data.reference,
@@ -716,7 +851,7 @@ export async function loadWritePageData(localDate: string): Promise<PageLoadResu
               application: "",
             },
     },
-    meta: passageResult.meta,
+    meta: mergeMeta(passageResult.meta, entriesResult.meta),
   };
 }
 

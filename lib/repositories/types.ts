@@ -123,6 +123,8 @@ export type HomePageData = {
 export type WritePageData = {
   viewer: ViewerContext;
   todayPassage: PassageScheduleRecord;
+  entryId: string | null;
+  entryStatus: EntryStatus | null;
   draft: EntryDraft;
 };
 

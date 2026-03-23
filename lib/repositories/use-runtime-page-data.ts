@@ -21,6 +21,7 @@ export function useRuntimePageData<T>({
   const [data, setData] = useState(initialData);
   const [meta, setMeta] = useState<ReadMeta>(initialMeta ?? { source: "mock", error: null });
   const [isLoading, setIsLoading] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const initialDataRef = useRef(initialData);
   const initialMetaRef = useRef<ReadMeta>(initialMeta ?? { source: "mock", error: null });
 
@@ -74,11 +75,23 @@ export function useRuntimePageData<T>({
     return () => {
       isCancelled = true;
     };
-  }, [enabled, reloadKey]);
+  }, [enabled, reloadKey, reloadTick]);
+
+  function reload() {
+    if (!enabled) {
+      setData(initialDataRef.current);
+      setMeta(initialMetaRef.current);
+      setIsLoading(false);
+      return;
+    }
+
+    setReloadTick((current) => current + 1);
+  }
 
   return {
     data,
     meta,
     isLoading,
+    reload,
   };
 }

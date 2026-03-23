@@ -3,11 +3,14 @@
 import { hasAppsScriptPublicUrl } from "@/lib/repositories/apps-script-source";
 import type { ReadMeta } from "@/lib/repositories/types";
 
-type DevDataSourceIndicatorProps = ReadMeta;
+type DevDataSourceIndicatorProps = ReadMeta & {
+  writeError?: string | null;
+};
 
 export function DevDataSourceIndicator({
   source,
   error,
+  writeError,
 }: DevDataSourceIndicatorProps) {
   const hasUrl = hasAppsScriptPublicUrl();
 
@@ -17,6 +20,7 @@ export function DevDataSourceIndicator({
       <p>apps script url present: {hasUrl ? "yes" : "no"}</p>
       <p>data source: {source}</p>
       <p>remote fetch failed: {error ? "yes" : "no"}</p>
+      <p>remote write failed: {writeError ? "yes" : "no"}</p>
     </div>
   );
 }
