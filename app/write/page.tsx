@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
-  getMockWritePageData,
+  getInitialWritePageDataForRuntime,
   getViewerContext,
   loadWritePageData,
   shouldUseAppsScriptRuntime,
@@ -15,7 +15,7 @@ import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 export default function WritePage() {
   const viewer = getViewerContext();
   const { data: writePageData, meta } = useRuntimePageData({
-    initialData: getMockWritePageData(viewer.localDate),
+    initialData: getInitialWritePageDataForRuntime(viewer.localDate),
     load: () => loadWritePageData(viewer.localDate),
     enabled: shouldUseAppsScriptRuntime(),
     reloadKey: viewer.localDate,
@@ -26,7 +26,7 @@ export default function WritePage() {
       <PageHeader
         eyebrow="오늘의 기록"
         title="오늘 마음에 남은 것을 적어보세요"
-        description="입력은 mock 상태이며, 지금은 저장 동작 없이 UI 구조만 준비해두었습니다."
+        description="오늘의 본문을 바탕으로 차분히 나눔을 적어보세요."
       />
 
       <Card className="space-y-4 bg-card-strong">

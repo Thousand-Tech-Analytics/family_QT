@@ -8,7 +8,7 @@ import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import { getFamilyStatusTone, getTodayDateLabel } from "@/lib/format";
 import {
-  getMockHomePageData,
+  getInitialHomePageDataForRuntime,
   getViewerContext,
   loadHomePageData,
   shouldUseAppsScriptRuntime,
@@ -17,7 +17,7 @@ import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 
 export default function HomePage() {
   const viewer = getViewerContext();
-  const initialData = getMockHomePageData(viewer.localDate);
+  const initialData = getInitialHomePageDataForRuntime(viewer.localDate);
   const { data: homePageData, meta } = useRuntimePageData({
     initialData,
     load: () => loadHomePageData(viewer.localDate),
@@ -118,11 +118,17 @@ export default function HomePage() {
           title="오늘의 가족 피드"
           description="가족이 남긴 오늘의 나눔을 차분한 카드로 모아봤어요."
         />
-        <div className="space-y-4">
-          {homePageData.todayFeed.map((entry) => (
-            <EntryCard key={entry.id} entry={entry} />
-          ))}
-        </div>
+        {homePageData.todayFeed.length > 0 ? (
+          <div className="space-y-4">
+            {homePageData.todayFeed.map((entry) => (
+              <EntryCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        ) : (
+          <Card className="text-sm leading-6 text-muted">
+            오늘 나눔을 불러오는 중이거나 아직 등록된 글이 없어요.
+          </Card>
+        )}
       </section>
 
       <DevDataSourceIndicator source={meta.source} error={meta.error} />

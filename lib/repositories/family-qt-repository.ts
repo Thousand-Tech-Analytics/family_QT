@@ -53,6 +53,17 @@ function createMeta(source: DataSourceKind, error: string | null = null): ReadMe
   };
 }
 
+function debugFallback(reason: string, details?: Record<string, string | boolean | null>) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  console.info("[repository] fallback decision", {
+    reason,
+    ...details,
+  });
+}
+
 function mergeMeta(...metaList: ReadMeta[]): ReadMeta {
   const error = metaList.find((meta) => meta.error)?.error ?? null;
   const source = metaList.every((meta) => meta.source === "apps-script") ? "apps-script" : "mock";
@@ -153,6 +164,47 @@ function shouldAllowMockFallback() {
   return process.env.NODE_ENV !== "production" || !hasAppsScriptPublicUrl();
 }
 
+function getInitialPassage(localDate: string): PassageScheduleRecord {
+  return {
+    localDate,
+    reference: "본문을 불러오는 중이에요.",
+  };
+}
+
+function getInitialHomePageData(localDate: string): HomePageData {
+  const viewer = getViewerContext();
+
+  return {
+    viewer,
+    todayPassage: getInitialPassage(localDate),
+    familyStatus: buildFamilyStatus([], localDate),
+    myEntryStatus: viewerDraft.localDate === localDate ? "draft" : "published",
+    myEntryId: "entry-pending",
+    todayFeed: [],
+  };
+}
+
+function getInitialWritePageData(localDate: string): WritePageData {
+  return {
+    viewer: getViewerContext(),
+    todayPassage: getInitialPassage(localDate),
+    draft: {
+      localDate,
+      passageReference: "",
+      memorableLine: "",
+      reflection: "",
+      application: "",
+    },
+  };
+}
+
+function getInitialArchivePageData(month: string): ArchivePageData {
+  return {
+    month,
+    groups: [],
+  };
+}
+
 function getMockTodayPassage(localDate: string): PassageScheduleRecord {
   return findMockPassage(localDate);
 }
@@ -245,6 +297,9 @@ function buildFamilyStatus(todayFeed: EntryFeedItem[], localDate: string): Famil
 
 async function readPassage(localDate: string): Promise<PageLoadResult<PassageScheduleRecord>> {
   if (!shouldUseAppsScriptRuntime()) {
+    debugFallback("using mock passage because production Apps Script runtime is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+    });
     return {
       data: getMockTodayPassage(localDate),
       meta: createMeta("mock"),
@@ -261,12 +316,20 @@ async function readPassage(localDate: string): Promise<PageLoadResult<PassageSch
   }
 
   if (!shouldAllowMockFallback()) {
+    debugFallback("production Apps Script passage failed and mock fallback is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+      error: remotePassage.error,
+    });
     return {
       data: getUnavailablePassage(localDate),
       meta: createMeta("apps-script", remotePassage.error || "Failed to load passage"),
     };
   }
 
+  debugFallback("using mock passage because local development fallback is allowed", {
+    hasPublicUrl: hasAppsScriptPublicUrl(),
+    error: remotePassage.error,
+  });
   return {
     data: getMockTodayPassage(localDate),
     meta: createMeta("mock", remotePassage.error),
@@ -275,6 +338,9 @@ async function readPassage(localDate: string): Promise<PageLoadResult<PassageSch
 
 async function readEntriesByDate(localDate: string): Promise<PageLoadResult<EntryFeedItem[]>> {
   if (!shouldUseAppsScriptRuntime()) {
+    debugFallback("using mock entries because production Apps Script runtime is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+    });
     return {
       data: getMockEntriesByDate(localDate),
       meta: createMeta("mock"),
@@ -294,12 +360,20 @@ async function readEntriesByDate(localDate: string): Promise<PageLoadResult<Entr
   }
 
   if (!shouldAllowMockFallback()) {
+    debugFallback("production Apps Script entries failed and mock fallback is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+      error: remoteEntries.error,
+    });
     return {
       data: [],
       meta: createMeta("apps-script", remoteEntries.error || "Failed to load entries"),
     };
   }
 
+  debugFallback("using mock entries because local development fallback is allowed", {
+    hasPublicUrl: hasAppsScriptPublicUrl(),
+    error: remoteEntries.error,
+  });
   return {
     data: getMockEntriesByDate(localDate),
     meta: createMeta("mock", remoteEntries.error),
@@ -308,6 +382,9 @@ async function readEntriesByDate(localDate: string): Promise<PageLoadResult<Entr
 
 async function readMonthSummary(month: string): Promise<PageLoadResult<MonthSummary>> {
   if (!shouldUseAppsScriptRuntime()) {
+    debugFallback("using mock month summary because production Apps Script runtime is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+    });
     return {
       data: getMockMonthSummary(month),
       meta: createMeta("mock"),
@@ -336,6 +413,10 @@ async function readMonthSummary(month: string): Promise<PageLoadResult<MonthSumm
   }
 
   if (!shouldAllowMockFallback()) {
+    debugFallback("production Apps Script month summary failed and mock fallback is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+      error: remoteSummary.error,
+    });
     return {
       data: {
         month,
@@ -345,6 +426,10 @@ async function readMonthSummary(month: string): Promise<PageLoadResult<MonthSumm
     };
   }
 
+  debugFallback("using mock month summary because local development fallback is allowed", {
+    hasPublicUrl: hasAppsScriptPublicUrl(),
+    error: remoteSummary.error,
+  });
   return {
     data: getMockMonthSummary(month),
     meta: createMeta("mock", remoteSummary.error),
@@ -353,6 +438,9 @@ async function readMonthSummary(month: string): Promise<PageLoadResult<MonthSumm
 
 async function readReplies(entryId: string): Promise<PageLoadResult<ReplyItem[]>> {
   if (!shouldUseAppsScriptRuntime()) {
+    debugFallback("using mock replies because production Apps Script runtime is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+    });
     return {
       data: getMockReplies(entryId),
       meta: createMeta("mock"),
@@ -372,12 +460,20 @@ async function readReplies(entryId: string): Promise<PageLoadResult<ReplyItem[]>
   }
 
   if (!shouldAllowMockFallback()) {
+    debugFallback("production Apps Script replies failed and mock fallback is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+      error: remoteReplies.error,
+    });
     return {
       data: [],
       meta: createMeta("apps-script", remoteReplies.error || "Failed to load replies"),
     };
   }
 
+  debugFallback("using mock replies because local development fallback is allowed", {
+    hasPublicUrl: hasAppsScriptPublicUrl(),
+    error: remoteReplies.error,
+  });
   return {
     data: getMockReplies(entryId),
     meta: createMeta("mock", remoteReplies.error),
@@ -386,6 +482,9 @@ async function readReplies(entryId: string): Promise<PageLoadResult<ReplyItem[]>
 
 async function readEntryById(entryId: string): Promise<PageLoadResult<EntryDetail | null>> {
   if (!shouldUseAppsScriptRuntime()) {
+    debugFallback("using mock entry detail because production Apps Script runtime is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+    });
     return {
       data: getMockEntryById(entryId),
       meta: createMeta("mock"),
@@ -406,6 +505,10 @@ async function readEntryById(entryId: string): Promise<PageLoadResult<EntryDetai
   }
 
   if (!shouldAllowMockFallback()) {
+    debugFallback("production Apps Script entry detail failed and mock fallback is disabled", {
+      hasPublicUrl: hasAppsScriptPublicUrl(),
+      error: remoteEntry.error,
+    });
     return {
       data: null,
       meta: mergeMeta(
@@ -415,6 +518,10 @@ async function readEntryById(entryId: string): Promise<PageLoadResult<EntryDetai
     };
   }
 
+  debugFallback("using mock entry detail because local development fallback is allowed", {
+    hasPublicUrl: hasAppsScriptPublicUrl(),
+    error: remoteEntry.error,
+  });
   return {
     data: getMockEntryById(entryId),
     meta: mergeMeta(createMeta("mock", remoteEntry.error), repliesResult.meta),
@@ -444,6 +551,10 @@ export function getMockHomePageData(localDate: string): HomePageData {
   };
 }
 
+export function getInitialHomePageDataForRuntime(localDate: string): HomePageData {
+  return shouldUseAppsScriptRuntime() ? getInitialHomePageData(localDate) : getMockHomePageData(localDate);
+}
+
 export function getMockWritePageData(localDate: string): WritePageData {
   const todayPassage = getMockTodayPassage(localDate);
 
@@ -463,6 +574,12 @@ export function getMockWritePageData(localDate: string): WritePageData {
   };
 }
 
+export function getInitialWritePageDataForRuntime(localDate: string): WritePageData {
+  return shouldUseAppsScriptRuntime()
+    ? getInitialWritePageData(localDate)
+    : getMockWritePageData(localDate);
+}
+
 export function getMockArchivePageData(month: string): ArchivePageData {
   const summary = getMockMonthSummary(month);
 
@@ -474,6 +591,10 @@ export function getMockArchivePageData(month: string): ArchivePageData {
       items: getMockEntriesByDate(item.localDate),
     })),
   };
+}
+
+export function getInitialArchivePageDataForRuntime(month: string): ArchivePageData {
+  return shouldUseAppsScriptRuntime() ? getInitialArchivePageData(month) : getMockArchivePageData(month);
 }
 
 export function getMockAdminPassagePageData(localDate: string): AdminPassagePageData {
@@ -490,6 +611,10 @@ export function getMockEntryDetailPageData(entryId: string | null) {
   }
 
   return getMockEntryById(entryId);
+}
+
+export function getInitialEntryDetailPageDataForRuntime() {
+  return shouldUseAppsScriptRuntime() ? null : null;
 }
 
 export async function getTodayPassage(localDate: string): Promise<PassageScheduleRecord> {

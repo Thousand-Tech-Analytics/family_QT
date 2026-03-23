@@ -41,8 +41,33 @@ type RemoteReadResult<T> = {
   error: string | null;
 };
 
+let hasLoggedUrlDetection = false;
+
+function debugLog(message: string, details?: unknown) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  if (details === undefined) {
+    console.info(`[apps-script] ${message}`);
+    return;
+  }
+
+  console.info(`[apps-script] ${message}`, details);
+}
+
 function getAppsScriptWebAppUrl() {
-  return process.env.NEXT_PUBLIC_APPS_SCRIPT_WEBAPP_URL?.trim() || null;
+  const url = process.env.NEXT_PUBLIC_APPS_SCRIPT_WEBAPP_URL?.trim() || null;
+
+  if (!hasLoggedUrlDetection && typeof window !== "undefined") {
+    hasLoggedUrlDetection = true;
+    debugLog("Public Apps Script URL detection", {
+      hasUrl: Boolean(url),
+      mode: process.env.NODE_ENV,
+    });
+  }
+
+  return url;
 }
 
 export function hasAppsScriptPublicUrl() {
@@ -93,7 +118,13 @@ async function fetchAppsScriptJson<T>(
 ): Promise<RemoteReadResult<T>> {
   const url = createAppsScriptUrl(action, params);
 
+  debugLog("URL detected", {
+    hasUrl: Boolean(url),
+    action,
+  });
+
   if (!url) {
+    debugLog("No Apps Script URL configured", { action });
     return {
       data: null,
       error: null,
@@ -114,11 +145,18 @@ async function fetchAppsScriptJson<T>(
 
     const payload = (await response.json()) as AppsScriptEnvelope<T> | T;
 
+    debugLog("Remote fetch succeeded", { action, strategy: "json" });
+
     return {
       data: normalizeEnvelope(payload),
       error: null,
     };
   } catch (error) {
+    debugLog("Remote fetch failed", {
+      action,
+      strategy: "json",
+      error: error instanceof Error ? error.message : "Unknown Apps Script fetch error",
+    });
     return {
       data: null,
       error: error instanceof Error ? error.message : "Unknown Apps Script fetch error",
@@ -161,6 +199,7 @@ async function fetchAppsScriptJsonp<T>(
       payload: AppsScriptEnvelope<T> | T,
     ) => {
       try {
+        debugLog("Remote fetch succeeded", { action, strategy: "jsonp" });
         resolve({
           data: normalizeEnvelope(payload),
           error: null,
@@ -176,6 +215,11 @@ async function fetchAppsScriptJsonp<T>(
     };
 
     script.onerror = () => {
+      debugLog("Remote fetch failed", {
+        action,
+        strategy: "jsonp",
+        error: "Apps Script JSONP request failed",
+      });
       resolve({
         data: null,
         error: "Apps Script JSONP request failed",
@@ -200,8 +244,9 @@ async function readAppsScriptAction<T>(
 
   const jsonpResult = await fetchAppsScriptJsonp<T>(action, params);
 
-  if (jsonpResult.error && process.env.NODE_ENV !== "production") {
-    console.error(`Apps Script ${action} failed`, {
+  if (jsonpResult.error) {
+    debugLog("All remote fetch strategies failed", {
+      action,
       fetchError: jsonResult.error,
       jsonpError: jsonpResult.error,
     });

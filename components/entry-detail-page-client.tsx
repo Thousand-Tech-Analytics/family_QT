@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
-  getMockEntryDetailPageData,
   loadEntryDetailPageData,
   shouldUseAppsScriptRuntime,
 } from "@/lib/repositories/family-qt-repository";
@@ -16,15 +15,27 @@ import { useRuntimePageData } from "@/lib/repositories/use-runtime-page-data";
 export function EntryDetailPageClient() {
   const searchParams = useSearchParams();
   const entryId = searchParams.get("id");
-  const { data: entry, meta } = useRuntimePageData({
-    initialData: getMockEntryDetailPageData(entryId),
+  const { data: entry, meta, isLoading } = useRuntimePageData({
+    initialData: null,
     load: () =>
       entryId
         ? loadEntryDetailPageData(entryId)
-        : Promise.resolve({ data: null, meta: { source: "mock", error: null } }),
+        : Promise.resolve({ data: null, meta: { source: "apps-script", error: null } }),
     enabled: shouldUseAppsScriptRuntime() && Boolean(entryId),
     reloadKey: entryId ?? "missing-entry-id",
   });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-5">
+        <Card className="space-y-4 text-center">
+          <p className="text-sm text-muted">나눔을 불러오는 중입니다.</p>
+          <h1 className="text-2xl font-bold">잠시만 기다려 주세요</h1>
+        </Card>
+        <DevDataSourceIndicator source={meta.source} error={meta.error} />
+      </div>
+    );
+  }
 
   if (!entryId || !entry) {
     return (
@@ -33,7 +44,7 @@ export function EntryDetailPageClient() {
           <p className="text-sm text-muted">찾을 수 없는 나눔입니다.</p>
           <h1 className="text-2xl font-bold">요청한 글이 아직 준비되지 않았어요</h1>
           <p className="text-sm leading-6 text-muted">
-            링크가 잘못되었거나, 아직 정적 빌드에 포함되지 않은 글일 수 있습니다.
+            링크가 잘못되었거나, Apps Script에서 아직 데이터를 읽지 못했을 수 있습니다.
           </p>
           <Link
             href="/"

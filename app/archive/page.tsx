@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTitle } from "@/components/section-title";
 import { Card } from "@/components/ui/card";
 import {
-  getMockArchivePageData,
+  getInitialArchivePageDataForRuntime,
   getViewerContext,
   loadArchivePageData,
   shouldUseAppsScriptRuntime,
@@ -17,7 +17,7 @@ export default function ArchivePage() {
   const viewer = getViewerContext();
   const month = viewer.localDate.slice(0, 7);
   const { data: archivePageData, meta } = useRuntimePageData({
-    initialData: getMockArchivePageData(month),
+    initialData: getInitialArchivePageDataForRuntime(month),
     load: () => loadArchivePageData(month),
     enabled: shouldUseAppsScriptRuntime(),
     reloadKey: month,
@@ -31,33 +31,39 @@ export default function ArchivePage() {
         description="V1은 단순한 날짜 그룹 리스트부터 시작합니다."
       />
 
-      <div className="space-y-4">
-        {archivePageData.groups.map((group) => (
-          <Card key={group.localDate} className="space-y-4">
-            <SectionTitle title={group.dateLabel} description={`${group.items.length}개의 나눔`} />
-            <div className="space-y-3">
-              {group.items.map((entry) => (
-                <Link
-                  key={entry.id}
-                  href={`/entry?id=${encodeURIComponent(entry.id)}`}
-                  className="block rounded-2xl border border-line/70 bg-white/75 px-4 py-4 transition hover:border-accent"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{entry.author.name}</p>
-                      <p className="mt-1 text-sm text-muted">{entry.passageReference}</p>
+      {archivePageData.groups.length > 0 ? (
+        <div className="space-y-4">
+          {archivePageData.groups.map((group) => (
+            <Card key={group.localDate} className="space-y-4">
+              <SectionTitle title={group.dateLabel} description={`${group.items.length}개의 나눔`} />
+              <div className="space-y-3">
+                {group.items.map((entry) => (
+                  <Link
+                    key={entry.id}
+                    href={`/entry?id=${encodeURIComponent(entry.id)}`}
+                    className="block rounded-2xl border border-line/70 bg-white/75 px-4 py-4 transition hover:border-accent"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{entry.author.name}</p>
+                        <p className="mt-1 text-sm text-muted">{entry.passageReference}</p>
+                      </div>
+                      <span className="text-xs text-muted">{entry.createdTimeLabel}</span>
                     </div>
-                    <span className="text-xs text-muted">{entry.createdTimeLabel}</span>
-                  </div>
-                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted">
-                    {entry.reflection}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
+                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted">
+                      {entry.reflection}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="text-sm leading-6 text-muted">
+          이 달의 기록을 불러오는 중이거나 아직 표시할 나눔이 없어요.
+        </Card>
+      )}
 
       <DevDataSourceIndicator source={meta.source} error={meta.error} />
     </div>
