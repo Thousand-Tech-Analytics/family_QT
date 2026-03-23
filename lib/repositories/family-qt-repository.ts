@@ -94,6 +94,14 @@ function getFamilyMemberById(id: string) {
   return member;
 }
 
+function getVisibleFamilyMembers() {
+  if (shouldUseAppsScriptRuntime()) {
+    return familyMembers.filter((member) => member.id !== "eunseo");
+  }
+
+  return familyMembers;
+}
+
 function findMockPassage(localDate: string): PassageScheduleRecord {
   return (
     passageScheduleRecords.find((item) => item.localDate === localDate) ?? {
@@ -251,7 +259,7 @@ function getMockStoredEntriesByDate(localDate: string): StoredEntryRecord[] {
 }
 
 function buildFamilyStatus(records: StoredEntryRecord[]): FamilyStatusItem[] {
-  return familyMembers.map((member) => {
+  return getVisibleFamilyMembers().map((member) => {
     const memberEntry = getLatestEntryForMember(records, member.id);
 
     if (memberEntry?.status === "draft") {
@@ -606,7 +614,7 @@ export function getViewerContext(): ViewerContext {
 }
 
 export function getFamilyMembers(): FamilyMember[] {
-  return familyMembers;
+  return getVisibleFamilyMembers();
 }
 
 export function getMockHomePageData(localDate: string): HomePageData {

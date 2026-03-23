@@ -11,6 +11,10 @@ type UseRuntimePageDataOptions<T> = {
   reloadKey: string;
 };
 
+function getDefaultMeta(enabled: boolean): ReadMeta {
+  return enabled ? { source: "apps-script", error: null } : { source: "mock", error: null };
+}
+
 export function useRuntimePageData<T>({
   initialData,
   initialMeta,
@@ -19,16 +23,16 @@ export function useRuntimePageData<T>({
   reloadKey,
 }: UseRuntimePageDataOptions<T>) {
   const [data, setData] = useState(initialData);
-  const [meta, setMeta] = useState<ReadMeta>(initialMeta ?? { source: "mock", error: null });
+  const [meta, setMeta] = useState<ReadMeta>(initialMeta ?? getDefaultMeta(enabled));
   const [isLoading, setIsLoading] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const initialDataRef = useRef(initialData);
-  const initialMetaRef = useRef<ReadMeta>(initialMeta ?? { source: "mock", error: null });
+  const initialMetaRef = useRef<ReadMeta>(initialMeta ?? getDefaultMeta(enabled));
 
   useEffect(() => {
     initialDataRef.current = initialData;
-    initialMetaRef.current = initialMeta ?? { source: "mock", error: null };
-  }, [initialData, initialMeta]);
+    initialMetaRef.current = initialMeta ?? getDefaultMeta(enabled);
+  }, [enabled, initialData, initialMeta]);
 
   const runLoad = useEffectEvent(async (isActive: () => boolean) => {
     if (!isActive()) {
@@ -49,7 +53,7 @@ export function useRuntimePageData<T>({
         return;
       }
       setMeta({
-        source: "mock",
+        source: enabled ? "apps-script" : "mock",
         error: error instanceof Error ? error.message : "Unknown runtime data error",
       });
     } finally {
